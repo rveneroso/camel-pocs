@@ -1,0 +1,4 @@
+com/camelpoc/orderanalysis/generator/OrderGenerator.class
+com/camelpoc/orderanalysis/config/ThreadPoolConfig.class
+com/camelpoc/orderanalysis/OrderAnalysisService.class
+com/camelpoc/orderanalysis/routes/OrderAnalysisRoute.class
