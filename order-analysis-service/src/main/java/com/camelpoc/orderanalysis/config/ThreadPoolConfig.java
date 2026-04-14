@@ -11,6 +11,6 @@ public class ThreadPoolConfig {
 
     @Bean
     public ExecutorService customPool() {
-        return Executors.newFixedThreadPool(10);
+        return Executors.newFixedThreadPool(16);
     }
 }

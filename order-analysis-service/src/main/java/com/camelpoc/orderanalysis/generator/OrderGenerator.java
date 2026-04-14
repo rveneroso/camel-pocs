@@ -16,7 +16,7 @@ public class OrderGenerator {
 
         Random random = new Random();
 
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 2000; i++) {
 
             Map<String, Object> order = new HashMap<>();
 
@@ -35,7 +35,7 @@ public class OrderGenerator {
             orders.add(order);
         }
 
-        mapper.writeValue(new File("payloads/orders_small.json"), orders);
+        mapper.writeValue(new File("payloads/two_thousand_orders.json"), orders);
 
         System.out.println("Arquivo gerado com sucesso!");
     }

@@ -1,12 +1,13 @@
 package com.camelpoc.orderanalysis.routes;
 
 import com.camelpoc.orderanalysis.model.Order;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.camelpoc.orderanalysis.service.FraudMessageService;
+import com.camelpoc.orderanalysis.service.MongoWriterService;
 import org.apache.camel.builder.RouteBuilder;
 import org.apache.camel.model.dataformat.JsonLibrary;
+import org.apache.camel.processor.aggregate.GroupedBodyAggregationStrategy;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 
 @Component
@@ -14,20 +15,25 @@ public class OrderAnalysisRoute extends RouteBuilder {
 
     private ExecutorService customPool;
 
-    public OrderAnalysisRoute(ExecutorService customPool) {
+    private MongoWriterService mongoWriterService;
+    private FraudMessageService fraudMessageService;
+
+    public OrderAnalysisRoute(ExecutorService customPool,
+                              MongoWriterService mongoWriterService,
+                              FraudMessageService fraudMessageService) {
         this.customPool = customPool;
+        this.mongoWriterService = mongoWriterService;
+        this.fraudMessageService = fraudMessageService;
     }
 
     @Override
     public void configure() {
 
-        // Tratamento de exceções
         onException(Exception.class)
                 .log("Erro: ${exception.message}")
                 .handled(true)
                 .maximumRedeliveries(0);
 
-        // Medição de tempo TOTAL da rota (executado ao final)
         onCompletion()
                 .onCompleteOnly()
                 .process(exchange -> {
@@ -46,44 +52,43 @@ public class OrderAnalysisRoute extends RouteBuilder {
                     exchange.setProperty("startTime", System.currentTimeMillis());
                 })
 
-                .unmarshal().json()
+                .convertBodyTo(String.class)
+
+                .unmarshal().json(JsonLibrary.Jackson, Order[].class)
 
                 .split(body())
+                    .streaming(true)
                     .parallelProcessing()
                     .executorService(customPool)
-
-                    // 👇 CONVERSÃO CORRETA
-                    .process(exchange -> {
-                        ObjectMapper mapper = new ObjectMapper();
-
-                        Map<String, Object> map = exchange.getIn().getBody(Map.class);
-                        Order order = mapper.convertValue(map, Order.class);
-
-                        exchange.getIn().setBody(order);
+                    .process(e -> {
+                        Order order = e.getIn().getBody(Order.class);
+                        e.getIn().setBody(order);
                     })
 
-                .choice()
-                    .when(simple("${body.customer.tier} == 'BRONZE' && ${body.total} >= 600"))
-                        .marshal().json()
-                        .to("jms:queue:fraud-analysis")
-                    .otherwise()
-                        .process(exchange -> {
-                            Order order = exchange.getIn().getBody(Order.class);
-
-                            if (order != null) {
-                                org.bson.Document customerDoc = new org.bson.Document();
-                                customerDoc.put("tier", order.getCustomer().getTier());
-
-                                org.bson.Document doc = new org.bson.Document();
-                                doc.put("orderId", order.getOrderId());
-                                doc.put("total", order.getTotal());
-                                doc.put("customer", customerDoc);
-
-                                // O Camel enviará este 'doc' como o documento a ser inserido
-                                exchange.getIn().setBody(doc);
-                            }
-                        })
-                        .to("mongodb:myMongo?database=order_analysis&collection=orders&operation=insert")
+                    .choice()
+                        .when(simple("${body.customer.tier} == 'BRONZE' && ${body.total} >= 600"))
+                            .setProperty("originalOrder", body())
+                            .marshal().json()
+                            .to("jms:queue:fraud-analysis")
+                            .setBody(exchangeProperty("originalOrder"))
+                        .otherwise()
+                            .to("direct:mongo")
+                    .end()
                 .end();
+
+        from("direct:mongo")
+                .aggregate(constant(true), new GroupedBodyAggregationStrategy())
+                .completionSize(500)
+                .completionTimeout(2000)
+                .forceCompletionOnStop()
+                .log("Gravando lote de ${body.size()} no MongoDB")
+                .to("bean:mongoWriterService?method=save")
+                .end();
+
+        from("direct:fraudAnalysis")
+                .routeId("fraud-analysis-route")
+                .bean(FraudMessageService.class, "prepare")
+                .to("jms:queue:fraud-analysis");
+
     }
 }
