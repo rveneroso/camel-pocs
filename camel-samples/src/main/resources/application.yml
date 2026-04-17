@@ -1,0 +1,18 @@
+spring:
+  activemq:
+    broker-url: tcp://localhost:61616
+    user: admin
+    password: admin
+
+camel:
+  springboot:
+    name: order-analysis-service
+  main:
+    run-controller: true
+  component:
+    mongodb:
+      connection-uri: mongodb://admin:admin@localhost:27017/?authSource=admin
+
+logging:
+  level:
+    org.apache.camel: INFO

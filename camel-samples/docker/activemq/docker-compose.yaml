@@ -1,0 +1,13 @@
+services:
+  # --- MENSAGERIA ---
+  activemq:
+    image: docker.io/apache/activemq-classic:latest
+    container_name: activemq
+#    networks:
+#      - integracao-net
+    ports:
+      - "61616:61616"   # Porta do Broker (O que o Camel usa)
+      - "8161:8161"     # Painel Web (http://localhost:8161)
+    # Se quiser salvar mensagens em disco, descomente as linhas abaixo:
+    # volumes:
+    #   - activemq_data:/opt/activemq/data

@@ -1,0 +1,5 @@
+camel:
+  component:
+    stub:
+      # Habilita o componente stub para interceptar endpoints físicos
+      enabled: true

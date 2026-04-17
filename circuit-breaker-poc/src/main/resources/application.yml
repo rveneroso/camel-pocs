@@ -1,0 +1,30 @@
+camel:
+  springboot:
+    name: circuit-breaker-poc
+
+  main:
+    run-controller: true
+
+  metrics:
+    enabled: true
+    route-policy-level: all
+
+  component:
+    kafka:
+      brokers: localhost:9092
+
+logging:
+  level:
+    org.apache.camel: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - prometheus
+          - health
+          - info
+  endpoint:
+    prometheus:
+      enabled: true
